@@ -1,10 +1,13 @@
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
-class RSAEncryptor:
-    def __init__(self, public_key, private_key=None):
-        self.public_key = public_key
-        self.private_key = private_key
+
+class RSAEncoder:
+    def __init__(self, key=None):
+        if key is None:
+            self.private_key, self.public_key = self.generate_key()
+        else:
+            self.private_key, self.public_key = self.load_key(key)
 
     @staticmethod
     def generate_key():
@@ -13,20 +16,21 @@ class RSAEncryptor:
             key_size=2048
         )
         public_key = private_key.public_key()
-        public_pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        private_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        return public_pem, private_pem
+        return private_key, public_key
 
-    def encrypt(self, plaintext):
-        ciphertext = self.public_key.encrypt(
-            plaintext,
+    @staticmethod
+    def load_key(key):
+        private_key = serialization.load_pem_private_key(
+            key.encode(),
+            password=None
+        )
+        public_key = private_key.public_key()
+        return private_key, public_key
+
+    def encrypt(self, key: str, plaintext: str) -> bytes:
+        key = serialization.load_pem_public_key(key.encode())
+        ciphertext = key.encrypt(
+            plaintext.encode('unicode_escape'),
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -35,8 +39,12 @@ class RSAEncryptor:
         )
         return ciphertext
 
-    def decrypt(self, ciphertext):
-        plaintext = self.private_key.decrypt(
+    def decrypt(self, key: str, ciphertext: bytes) -> str:
+        key = serialization.load_pem_private_key(
+            key.encode(),
+            password=None
+        )
+        plaintext = key.decrypt(
             ciphertext,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -44,4 +52,37 @@ class RSAEncryptor:
                 label=None
             )
         )
-        return plaintext
+        return plaintext.decode()
+
+    def load_key_from_file(self, filename):
+        with open(filename, "rb") as key_file:
+            private_key = serialization.load_pem_private_key(
+                key_file.read(),
+                password=None
+            )
+        public_key = private_key.public_key()
+        self.private_key, self.public_key = private_key, public_key
+
+    def load_public_key_from_file(self, filename):
+        with open(filename, "rb") as key_file:
+            public_key = serialization.load_pem_public_key(
+                key_file.read()
+            )
+        self.public_key = public_key
+
+    def save_private_key_to_file(self, filename):
+        with open(filename, "wb") as key_file:
+            key_file.write(
+                self.private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+
+    def save_public_key_to_file(self, filename):
+        with open(filename, "wb") as key_file:
+            key_file.write(
+                self.public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                ))
