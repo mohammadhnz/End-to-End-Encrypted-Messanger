@@ -1,6 +1,9 @@
+import json
 import socket
 import threading
 
+from server.controllers.authentication import Authentication
+from utils.base_classes.message import MessageHandler, Message
 from utils.base_classes.subject import Subject
 from utils.encryptor_services.rsa_encryptor import RSAEncoder
 
@@ -30,6 +33,20 @@ class Server(Subject):
 
                 if not data:
                     break
-                message = self.encoder.decrypt(self.private_key, data)
+                encoded_message = self.encoder.decrypt(self.private_key, data)
+                message: Message = MessageHandler.decode_message(encoded_message)
+                response = getattr(self, message.action)(message.content)
+                conn.sendall(response.encode())
+                conn.sendall(self.encoder.sign_with_private_key(self.private_key, response))
+                self.notify(message.content)
+                self.notify(message.action)
 
-                self.notify(message)
+    def register(self, content):
+        data = json.loads(content)
+        status, _ = Authentication().register(data['username'], data['password'])
+        return str(status)
+
+    def login(self, content):
+        data = json.loads(content)
+        status, _ = Authentication().login(data['username'], data['password'], data['public_key'])
+        return str(status)

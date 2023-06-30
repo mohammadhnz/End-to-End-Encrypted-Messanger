@@ -24,18 +24,23 @@ class Message:
         self.time_stamp = time_stamp
 
 
-
 class MessageHandler:
     @classmethod
     def create_register_message(cls, username, password):
+        content = json.dumps({'username': username, 'password': password})
+        action = MessageType.REGISTER.value
+        return cls._insecure_message(content, action)
+
+    @classmethod
+    def _insecure_message(cls, content, action):
         message = Message(
-            action=MessageType.REGISTER.value,
+            action=action,
             destination='Server',
-            source='',
-            nonce='',
-            seq='',
-            time_stamp='',
-            content=json.dumps({'username': username, 'password': password}),
+            source=None,
+            nonce=None,
+            seq=None,
+            time_stamp=None,
+            content=content,
         )
         return json.dumps({
             'destination': message.destination,
@@ -45,15 +50,21 @@ class MessageHandler:
             'nonce': message.nonce,
             'seq': message.seq,
             'time_stamp': message.time_stamp,
-        }, indent=4)
+        })
 
-    def decode_message(self, encoded_message: str) -> Message:
+    @classmethod
+    def create_login_message(cls, username, password, public_key):
+        content = json.dumps({'username': username, 'password': password, 'ali': '123'})
+        action = MessageType.LOGIN.value
+        return cls._insecure_message(content, action)
+
+    @classmethod
+    def decode_message(cls, encoded_message: str) -> Message:
         data = json.loads(encoded_message)
         data = {
             key: value[0] if isinstance(value, list) or isinstance(value, tuple) else value
             for key, value in data.items()
         }
-        print(data)
         message = Message(
             data['source'],
             data['content'],
@@ -63,4 +74,7 @@ class MessageHandler:
             data['destination'],
             data['time_stamp'],
         )
-        return message, data
+        for key, value in data.items():
+            setattr(message, key, value)
+
+        return message

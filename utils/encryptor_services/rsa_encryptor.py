@@ -1,3 +1,5 @@
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
@@ -13,7 +15,7 @@ class RSAEncoder:
     def generate_key():
         private_key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=2048
+            key_size=2048 * 8
         )
         public_key = private_key.public_key()
         return private_key, public_key
@@ -30,7 +32,7 @@ class RSAEncoder:
     def encrypt(self, key: str, plaintext: str) -> bytes:
         key = serialization.load_pem_public_key(key.encode())
         ciphertext = key.encrypt(
-            plaintext.encode('unicode_escape'),
+            plaintext.encode(),
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -53,6 +55,37 @@ class RSAEncoder:
             )
         )
         return plaintext.decode()
+
+    def sign_with_private_key(self, private_key, message):
+        sender_key = serialization.load_pem_private_key(
+            private_key.encode(),
+            password=None
+        )
+        signature = sender_key.sign(
+            message.encode(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return signature
+
+    def verify_signature(self, signature, public_key, message):
+        try:
+            recipient_key = serialization.load_pem_public_key(public_key.encode())
+            recipient_key.verify(
+                signature,
+                message.encode(),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            return True
+        except InvalidSignature:
+            return False
 
     def load_key_from_file(self, filename):
         with open(filename, "rb") as key_file:
