@@ -33,7 +33,7 @@ class Authentication:
             return False, "Wrong username or password"
         self._store_public_key(username, public_key)
         self._add_to_online_users(username)
-        return True
+        return True, "Good"
 
     def _authenticate(self, username, password):
         return User.username_exists(username) and User.validate_password(username, password)

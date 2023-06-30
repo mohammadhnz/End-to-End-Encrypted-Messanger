@@ -1,14 +1,16 @@
 import json
 import socket
 import threading
+from ast import literal_eval
 
 from server.controllers.authentication import Authentication
 from utils.base_classes.message import MessageHandler, Message
 from utils.base_classes.subject import Subject
+from utils.encryptor_services.aes_encryptor import AESEncoder
 from utils.encryptor_services.rsa_encryptor import RSAEncoder
 
 
-class Server(Subject):
+class ServerHandler(Subject):
     def __init__(self, host, port):
         super().__init__()
         self.host = host
@@ -30,10 +32,14 @@ class Server(Subject):
         with conn:
             while True:
                 data = conn.recv(2 ** 13)
-
                 if not data:
                     break
-                encoded_message = self.encoder.decrypt(self.private_key, data)
+                data = json.loads(data)
+                sign = literal_eval(data['sign'])
+                sign = self.encoder.decrypt(self.private_key, sign)
+                iv = sign[:16]
+                key = sign[16:]
+                encoded_message = AESEncoder().decrypt(literal_eval(data['ciphertext']), iv, key)
                 message: Message = MessageHandler.decode_message(encoded_message)
                 response = getattr(self, message.action)(message.content)
                 conn.sendall(response.encode())

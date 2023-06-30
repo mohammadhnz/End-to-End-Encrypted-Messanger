@@ -15,7 +15,7 @@ class RSAEncoder:
     def generate_key():
         private_key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=2048 * 8
+            key_size=2048
         )
         public_key = private_key.public_key()
         return private_key, public_key
@@ -32,7 +32,7 @@ class RSAEncoder:
     def encrypt(self, key: str, plaintext: str) -> bytes:
         key = serialization.load_pem_public_key(key.encode())
         ciphertext = key.encrypt(
-            plaintext.encode(),
+            plaintext.encode() if isinstance(plaintext, str) else plaintext,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -54,7 +54,7 @@ class RSAEncoder:
                 label=None
             )
         )
-        return plaintext.decode()
+        return plaintext
 
     def sign_with_private_key(self, private_key, message):
         sender_key = serialization.load_pem_private_key(

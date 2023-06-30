@@ -54,7 +54,7 @@ class MessageHandler:
 
     @classmethod
     def create_login_message(cls, username, password, public_key):
-        content = json.dumps({'username': username, 'password': password, 'ali': '123'})
+        content = json.dumps({'username': username, 'password': password, 'public_key': public_key})
         action = MessageType.LOGIN.value
         return cls._insecure_message(content, action)
 

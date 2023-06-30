@@ -1,3 +1,4 @@
+import json
 import socket
 
 from utils.base_classes.message import MessageHandler
@@ -45,7 +46,7 @@ class Client:
     def _encrypt_message(self, message):
         ciphertext, iv, key = AESEncoder().encrypt(message)
         sign = self.encoder.encrypt(self.server_public_key, iv + key)
-        return self.encoder.encrypt(self.server_public_key, message)
+        return json.dumps({'sign': str(sign), 'ciphertext': str(ciphertext)}).encode()
 
 
 if __name__ == "__main__":
@@ -61,3 +62,5 @@ if __name__ == "__main__":
     #     print(response)
     # while (text := input()) != 'exit':
     #     client1.send_request(text)
+
+
