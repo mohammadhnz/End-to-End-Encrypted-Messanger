@@ -30,4 +30,6 @@ class Server(Subject):
 
                 if not data:
                     break
-                self.notify(self.encoder.decrypt(self.private_key, data))
+                message = self.encoder.decrypt(self.private_key, data)
+
+                self.notify(message)
