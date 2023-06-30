@@ -103,19 +103,29 @@ class RSAEncoder:
             )
         self.public_key = public_key
 
-    def save_private_key_to_file(self, filename):
+    def save_private_key_to_file(self, filename, private_key):
         with open(filename, "wb") as key_file:
             key_file.write(
-                self.private_key.private_bytes(
+                private_key.private_bytes(
                     encoding=serialization.Encoding.PEM,
                     format=serialization.PrivateFormat.PKCS8,
                     encryption_algorithm=serialization.NoEncryption()
                 ))
 
-    def save_public_key_to_file(self, filename):
+    def save_public_key_to_file(self, filename, public_key):
         with open(filename, "wb") as key_file:
             key_file.write(
-                self.public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
-                ))
+                self._encode_public_key(public_key))
+
+    def _encode_public_key(self, public_key):
+        return public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+
+    def _encode_private_key(self, private_key):
+        return private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )

@@ -15,6 +15,8 @@ class Client:
         with open("server_public_key.pem", "rb") as key_file:
             self.server_public_key = key_file.read().decode()
         self.encoder = RSAEncoder()
+        self.private_key = None
+        self.public_key = None
 
     def connect(self):
         self.socket.connect((self.host, self.port))
@@ -36,8 +38,10 @@ class Client:
         return response
 
     def send_login_request(self, username, password):
-        public_key = '123'
-        message = MessageHandler.create_login_message(username, password, public_key)
+        private_key, public_key = self.encoder.generate_key()
+        self.private_key = self.encoder._encode_public_key(public_key)
+        self.private_key = self.encoder._encode_private_key(private_key)
+        message = MessageHandler.create_login_message(username, password, self.public_key)
         response = self.send_request(
             message
         )
@@ -62,5 +66,3 @@ if __name__ == "__main__":
     #     print(response)
     # while (text := input()) != 'exit':
     #     client1.send_request(text)
-
-
