@@ -1,7 +1,7 @@
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization, hashes
+import hashlib
+
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes, serialization
 
 
 class RSAEncoder:
@@ -56,27 +56,36 @@ class RSAEncoder:
         )
         return plaintext
 
-    def sign_with_private_key(self, private_key, message):
+    def sign_message(self, message, private_key):
         sender_key = serialization.load_pem_private_key(
             private_key.encode(),
             password=None
         )
+        hasher = hashlib.sha256()
+        hasher.update(message)
+        digest = hasher.digest()
+
         signature = sender_key.sign(
-            message.encode(),
+            digest,
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
             ),
             hashes.SHA256()
         )
+
         return signature
 
-    def verify_signature(self, signature, public_key, message):
+    def verify_signature(self, message, signature, public_key):
+        public_key = serialization.load_pem_public_key(public_key.encode())
+        hasher = hashlib.sha256()
+        hasher.update(message)
+        digest = hasher.digest()
+
         try:
-            recipient_key = serialization.load_pem_public_key(public_key.encode())
-            recipient_key.verify(
+            public_key.verify(
                 signature,
-                message.encode(),
+                digest,
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
                     salt_length=padding.PSS.MAX_LENGTH
@@ -84,7 +93,7 @@ class RSAEncoder:
                 hashes.SHA256()
             )
             return True
-        except InvalidSignature:
+        except:
             return False
 
     def load_key_from_file(self, filename):

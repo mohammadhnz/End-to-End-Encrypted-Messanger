@@ -35,13 +35,13 @@ class TestIntegration:
         client.connect()
 
         # Send a register request to the server
-        status, response = client.send_register_request(
+        response = client.send_register_request(
             "".join(['testuser' for i in range(10)]),
             "".join(['test_password123' for i in range(10)])
         )
 
         # Verify that the response is as expected
-        assert status == True
+        assert response == 'True'
 
     def test_register_and_login(self):
         # Create a client and connect to the server
@@ -49,13 +49,13 @@ class TestIntegration:
         client.connect()
 
         # Send a register request to the server
-        status, response = client.send_register_request('testuser', 'testpassword')
+        response = client.send_register_request('testuser', 'testpassword')
 
         # Verify that the response is as expected
-        assert status == True
+        assert response == 'True'
 
         # Send a login request to the server
-        status, response = client.send_login_request('testuser', 'testpassword')
+        response = client.send_login_request('testuser', 'testpassword')
 
         # Verify that the response is as expected
-        assert status == True
+        assert response == 'True'

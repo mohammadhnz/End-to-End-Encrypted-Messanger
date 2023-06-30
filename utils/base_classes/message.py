@@ -14,7 +14,6 @@ class Message:
             destination,
             time_stamp
     ):
-        print(source)
         self.source = source,
         self.content = content,
         self.action = action,
@@ -78,3 +77,10 @@ class MessageHandler:
             setattr(message, key, value)
 
         return message
+
+    @classmethod
+    def create_online_users_message(cls, username):
+        content = json.dumps({'username': username})
+        action = MessageType.ONLINE_USERS_REQUEST.value
+        return cls._insecure_message(content, action)
+

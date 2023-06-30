@@ -1,5 +1,6 @@
 import json
 import socket
+from ast import literal_eval
 
 from utils.base_classes.message import MessageHandler
 from utils.connection_env import SERVER_PORT
@@ -17,6 +18,7 @@ class Client:
         self.encoder = RSAEncoder()
         self.private_key = None
         self.public_key = None
+        self.username = None
 
     def connect(self):
         self.socket.connect((self.host, self.port))
@@ -26,12 +28,13 @@ class Client:
         self.socket.sendall(ciphertext)
         response = self.socket.recv(2048)
         signature = self.socket.recv(2048)
-        status = self.encoder.verify_signature(signature, self.server_public_key, response.decode())
-        return status, response
+        status = self.encoder.verify_signature(response, signature, self.server_public_key)
+        if not status:
+            raise Exception("Sth")
+        return response.decode()
 
     def send_register_request(self, username, password):
         message = MessageHandler.create_register_message(username, password)
-        print(message)
         response = self.send_request(
             message
         )
@@ -45,11 +48,20 @@ class Client:
         response = self.send_request(
             message
         )
+        if response:
+            self.username = username
+        return response
+
+    def send_online_users(self):
+        message = MessageHandler.create_online_users_message(self.username)
+        response = self.send_request(message)
         return response
 
     def _encrypt_message(self, message):
         ciphertext, iv, key = AESEncoder().encrypt(message)
         sign = self.encoder.encrypt(self.server_public_key, iv + key)
+        # if self.private_key and self.username:
+        #     sign = self.encoder.sign_with_private_key(self.private_key, sign)
         return json.dumps({'sign': str(sign), 'ciphertext': str(ciphertext)}).encode()
 
 

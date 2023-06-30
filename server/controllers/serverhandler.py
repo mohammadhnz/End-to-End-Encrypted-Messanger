@@ -34,18 +34,26 @@ class ServerHandler(Subject):
                 data = conn.recv(2 ** 13)
                 if not data:
                     break
-                data = json.loads(data)
-                sign = literal_eval(data['sign'])
-                sign = self.encoder.decrypt(self.private_key, sign)
-                iv = sign[:16]
-                key = sign[16:]
-                encoded_message = AESEncoder().decrypt(literal_eval(data['ciphertext']), iv, key)
-                message: Message = MessageHandler.decode_message(encoded_message)
-                response = getattr(self, message.action)(message.content)
-                conn.sendall(response.encode())
-                conn.sendall(self.encoder.sign_with_private_key(self.private_key, response))
-                self.notify(message.content)
-                self.notify(message.action)
+                ## load data as dict which has sign and ciphertext
+                message = self._decrypt_request(data)
+                if message.action in ['register', 'login']:
+                    response = getattr(self, message.action)(message.content)
+                    conn.sendall(response.encode())
+                    conn.sendall(self.encoder.sign_message(response.encode(), self.private_key))
+                else:
+                    print('')
+                    self.notify(message.content)
+                    self.notify(message.action)
+
+    def _decrypt_request(self, data) -> Message:
+        data = json.loads(data)
+        sign = literal_eval(data['sign'])
+        sign = self.encoder.decrypt(self.private_key, sign)
+        iv = sign[:16]
+        key = sign[16:]
+        encoded_message = AESEncoder().decrypt(literal_eval(data['ciphertext']), iv, key)
+        message: Message = MessageHandler.decode_message(encoded_message)
+        return message
 
     def register(self, content):
         data = json.loads(content)
