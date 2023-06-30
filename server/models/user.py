@@ -1,5 +1,6 @@
 import hashlib
 import json
+from ast import literal_eval
 
 from server.controllers.data_io import DataIO
 
@@ -47,6 +48,12 @@ class User:
 
     def to_dict(self):
         return {'username': self.username, 'password_hash': self.password_hash}
+    @classmethod
+    def get_user_public_key(cls, username):
+        for user in cls.objects:
+            if user.username == username:
+                return user.public_key if isinstance(user.public_key, bytes) else literal_eval(user.public_key)
+        raise Exception(f"No user with username {username}")
 
     @classmethod
     def validate_password(cls, username, password):

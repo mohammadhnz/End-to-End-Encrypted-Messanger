@@ -42,9 +42,9 @@ class Client:
 
     def send_login_request(self, username, password):
         private_key, public_key = self.encoder.generate_key()
-        self.private_key = self.encoder._encode_public_key(public_key)
+        self.public_key = self.encoder._encode_public_key(public_key)
         self.private_key = self.encoder._encode_private_key(private_key)
-        message = MessageHandler.create_login_message(username, password, self.public_key)
+        message = MessageHandler.create_login_message(username, password, str(self.public_key))
         response = self.send_request(
             message
         )
@@ -52,16 +52,26 @@ class Client:
             self.username = username
         return response
 
-    def send_online_users(self):
+    def send_online_users_list_request(self):
         message = MessageHandler.create_online_users_message(self.username)
+        return self.send_secure_request(message)
+
+    def send_secure_request(self, message):
         response = self.send_request(message)
+        response = self._decrypt_response(response)
+        return response
+
+    def _decrypt_response(self, response):
+        response = json.loads(response)
+        cipher_text = literal_eval(response['cipher_text'])
+        encrypted_keys = literal_eval(response['encrypted_keys'])
+        keys = self.encoder.decrypt(self.private_key, encrypted_keys)
+        response = AESEncoder.decrypt(cipher_text, keys[:16], keys[16:])
         return response
 
     def _encrypt_message(self, message):
         ciphertext, iv, key = AESEncoder().encrypt(message)
-        sign = self.encoder.encrypt(self.server_public_key, iv + key)
-        # if self.private_key and self.username:
-        #     sign = self.encoder.sign_with_private_key(self.private_key, sign)
+        sign = self.encoder.encrypt(self.server_public_key.encode(), iv + key)
         return json.dumps({'sign': str(sign), 'ciphertext': str(ciphertext)}).encode()
 
 

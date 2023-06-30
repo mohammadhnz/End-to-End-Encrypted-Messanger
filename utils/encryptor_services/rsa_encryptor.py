@@ -1,7 +1,7 @@
 import hashlib
 
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
 
 class RSAEncoder:
@@ -29,8 +29,8 @@ class RSAEncoder:
         public_key = private_key.public_key()
         return private_key, public_key
 
-    def encrypt(self, key: str, plaintext: str) -> bytes:
-        key = serialization.load_pem_public_key(key.encode())
+    def encrypt(self, key: bytes, plaintext: str) -> bytes:
+        key = serialization.load_pem_public_key(key)
         ciphertext = key.encrypt(
             plaintext.encode() if isinstance(plaintext, str) else plaintext,
             padding.OAEP(
@@ -41,9 +41,9 @@ class RSAEncoder:
         )
         return ciphertext
 
-    def decrypt(self, key: str, ciphertext: bytes) -> str:
+    def decrypt(self, key: bytes, ciphertext: bytes) -> str:
         key = serialization.load_pem_private_key(
-            key.encode(),
+            key,
             password=None
         )
         plaintext = key.decrypt(
