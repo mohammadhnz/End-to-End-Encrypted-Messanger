@@ -31,7 +31,7 @@ class TestIntegration:
 
     def test_register_with_long_username_and_password(self):
         # Create a client and connect to the server
-        client = Client('localhost', self.socket)
+        client = Client('localhost', self.socket, 10)
         client.connect()
 
         # Send a register request to the server
@@ -45,7 +45,7 @@ class TestIntegration:
 
     def test_register_and_login(self):
         # Create a client and connect to the server
-        client = Client('localhost', self.socket)
+        client = Client('localhost', self.socket, 11)
         client.connect()
 
         # Send a register request to the server

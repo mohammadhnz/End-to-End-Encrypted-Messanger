@@ -30,15 +30,15 @@ class TestIntegration:
             os.remove('users.json')
 
     def test_retrieve_online_users(self):
-        client = self._create_user_and_connection('testuser')
-        client1 = self._create_user_and_connection('testuser1')
+        client = self._create_user_and_connection('testuser', 10)
+        client1 = self._create_user_and_connection('testuser1', 11)
 
         response = client.send_online_users_list_request()
 
         assert response == '["testuser", "testuser1"]'
 
-    def _create_user_and_connection(self, username):
-        client = Client('localhost', self.socket)
+    def _create_user_and_connection(self, username, id):
+        client = Client('localhost', self.socket, id)
         client.connect()
         response = client.send_register_request(username, 'testpassword')
         assert response == 'True'

@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+import threading
 from ast import literal_eval
 
 from utils.base_classes.message import MessageHandler
@@ -11,7 +12,7 @@ from utils.nonce import create_nonce, validate_nonce
 
 
 class Client:
-    def __init__(self, host, port):
+    def __init__(self, host, port, id=10):
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -24,13 +25,23 @@ class Client:
         self.users_public_keys = dict()
         self.last_nonce = None
         self.temp_user_name = None
+        self.id = id
+        self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.receive_socket.bind((host, port + id))
 
     def connect(self):
         self.socket.connect((self.host, self.port))
+        self.start_listening_thread()
+        self.send_request(MessageHandler.create_listen_port_request(self.port + self.id), no_response=True)
 
-    def send_request(self, message):
+    def start_listening_thread(self):
+        threading.Thread(target=self.listen).start()
+
+    def send_request(self, message, no_response=False):
         ciphertext = self._encrypt_message(message)
         self.socket.sendall(ciphertext)
+        if no_response:
+            return None
         response = self.socket.recv(4096)
         signature = self.socket.recv(4096)
         status = self.encoder.verify_signature(response, signature, self.server_public_key)
@@ -107,6 +118,19 @@ class Client:
         ciphertext, iv, key = AESEncoder().encrypt(message)
         sign = self.encoder.encrypt(self.server_public_key.encode(), iv + key)
         return json.dumps({'sign': str(sign), 'ciphertext': str(ciphertext)}).encode()
+
+    def listen(self):
+        self.receive_socket.listen()
+        while True:
+            conn, addr = self.receive_socket.accept()
+            print(f"Connected by {addr}")
+            threading.Thread(target=self.handle_server, args=(conn,)).start()
+
+    def handle_server(self, connection):
+        with connection:
+            while True:
+                data = connection.recv(2 ** 15)
+                print(data)
 
 
 if __name__ == "__main__":

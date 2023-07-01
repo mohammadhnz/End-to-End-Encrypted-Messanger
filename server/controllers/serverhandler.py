@@ -23,6 +23,7 @@ class ServerHandler(Subject):
             self.private_key = key_file.read().decode()
         self.encoder = RSAEncoder()
         self.online_users_dict = dict()
+        self.listen_sockets = dict()
 
     def listen(self):
         self.socket.listen()
@@ -33,11 +34,17 @@ class ServerHandler(Subject):
 
     def handle_client(self, connection):
         with connection:
+            data = connection.recv(2 ** 15)
+            message = self._decrypt_request(data)
+            client_listen_port = int(message.content)
+            client_listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_listen_socket.connect((self.host, client_listen_port))
+            self.listen_sockets[connection] = client_listen_socket
             while True:
                 data = connection.recv(2 ** 15)
                 if not data:
                     break
-                ## load data as dict which has sign and ciphertext
+
                 message = self._decrypt_request(data)
 
                 if connection not in self.online_users_dict:
@@ -52,7 +59,7 @@ class ServerHandler(Subject):
                     response = json.dumps({
                         'encrypted_keys': str(encrypted_keys),
                         'cipher_text': str(cipher_text),
-                        'message_type':message.action
+                        'message_type': message.action
                     })
                 connection.sendall(response.encode())
                 connection.sendall(self.encoder.sign_message(response.encode(), self.private_key))
@@ -94,7 +101,7 @@ class ServerHandler(Subject):
                 return connection
 
     def handle_handshake(self, message, connection):
-        other_side_connection =self.get_connection_with_username(message.destination)
+        other_side_connection = self.get_connection_with_username(message.destination)
         other_side_connection.sendall(
             json.dumps({
                 'message': message.content,

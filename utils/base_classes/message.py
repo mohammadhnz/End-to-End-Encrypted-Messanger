@@ -103,3 +103,7 @@ class MessageHandler:
     def create_handshake_request(cls, content, destination):
         action = MessageType.HANDSHAKE.value
         return cls._insecure_message(content, action, destination=destination, )
+
+    @classmethod
+    def create_listen_port_request(cls, port):
+        return cls._insecure_message(str(port), 'nothing')
