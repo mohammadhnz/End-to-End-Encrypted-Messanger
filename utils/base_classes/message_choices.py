@@ -9,3 +9,5 @@ class MessageType(Enum):
     HANDSHAKE = 'handle_handshake'
     HANDSHAKE_RESPONSE = 'handle_handshake_response'
     HANDSHAKE_FINALIZE = 'finalize_handshake'
+    CHAT_MESSAGE_REQUEST = 'send_chat_message'
+    CHAT_MESSAGE_ACK = 'acknowledge_chat_message'

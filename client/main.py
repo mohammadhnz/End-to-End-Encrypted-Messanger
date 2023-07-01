@@ -3,6 +3,8 @@ import os
 import socket
 import threading
 from ast import literal_eval
+from collections import defaultdict
+from random import randint
 
 from utils.base_classes.message import MessageHandler
 from utils.connection_env import SERVER_PORT
@@ -11,9 +13,16 @@ from utils.encryptor_services.rsa_encryptor import RSAEncoder
 from utils.nonce import create_nonce, validate_nonce, convert_nonce
 
 
+def random_seq_num():
+    return randint(100, 500)
+
+
 class Client:
     def __init__(self, host, port, id=10):
+        self.messages = defaultdict(list)
         self.session_keys = dict()
+        self.users_public_keys = dict()
+        self.sequence_numbers = defaultdict(int)
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -23,7 +32,6 @@ class Client:
         self.private_key = None
         self.public_key = None
         self.username = None
-        self.users_public_keys = dict()
         self.last_nonce = None
         self.temp_user_name = None
         self.id = id
@@ -43,8 +51,8 @@ class Client:
         self.socket.sendall(ciphertext)
         if no_response:
             return None
-        response = self.socket.recv(4096)
-        signature = self.socket.recv(4096)
+        response = self.socket.recv(4096 * 4)
+        signature = self.socket.recv(4096 * 4)
         status = self.encoder.verify_signature(response, signature, self.server_public_key)
         if not status:
             raise Exception("Sth")
@@ -75,6 +83,23 @@ class Client:
 
     def send_handshake_request(self, username):
         self._update_public_key_of_receiver(username)
+        return self._initialize_handshake_process(username)
+
+    def send_message(self, username, message):
+        if username not in self.session_keys:
+            raise Exception(f'no session key for user{username}')
+        self.last_nonce = create_nonce()
+        message_packet = json.dumps({
+            'message': message,
+            'sequence_number': self.sequence_numbers[username],
+            'nonce': self.last_nonce
+        })
+        iv, key = self.session_keys[username]
+        cipher_text, _, _ = AESEncoder.encrypt(message_packet, iv, key)
+        message = MessageHandler.create_chat_message_request(str(cipher_text), username, self.username)
+        return self.send_secure_request(message)
+
+    def _initialize_handshake_process(self, username):
         self.last_nonce = create_nonce()
         iv, key = os.urandom(16), os.urandom(32)
         self.session_keys[username] = (iv, key)
@@ -104,8 +129,8 @@ class Client:
             return
         raise Exception('Failed to update user\'s publick key.')
 
-    def send_secure_request(self, message):
-        response = self.send_request(message)
+    def send_secure_request(self, message, no_response=False):
+        response = self.send_request(message, no_response)
         response = self._decrypt_response(response)
         return response
 
@@ -132,59 +157,94 @@ class Client:
     def handle_server(self, connection):
         with connection:
             while True:
-                data = connection.recv(2 ** 15)
+                data = connection.recv(2 ** 16)
                 data = json.loads(data)
                 message = data['message']
                 sign = literal_eval(data['sign'])
                 stage = data['stage']
                 status = self.encoder.verify_signature(message.encode(), sign, self.server_public_key)
                 ## handle hanshake 3rd step
+                try:
+                    self._handleee(data, message, stage)
+                except BaseException as e:
+                    a = e
+                    print('1')
 
-                if stage == '3':
-                    message = json.loads(message)
-                    encrypted_keys = literal_eval(message['encrypted_keys'])
-                    cipher_text = literal_eval(message['cipher_text'])
-                    keys = self.encoder.decrypt(self.private_key, encrypted_keys)
-                    iv = keys[:16]
-                    key = keys[16:]
-                    plaintext = AESEncoder.decrypt(cipher_text, iv, key)
-                    plaintext = json.loads(plaintext)
-                    converted_nonce = convert_nonce(plaintext['nonce'])
-                    self.session_keys[plaintext['username']] = (iv, key)
-                    self.last_nonce = create_nonce()
-                    data_to_send = json.dumps({
-                        'nonce': self.last_nonce,
-                        'converted_nonce': converted_nonce,
-                    })
-                    cipher_text, _, _ = AESEncoder.encrypt(data_to_send, iv, key)
-                    message = MessageHandler.create_handshake_response_request(
-                        str(cipher_text),
-                        plaintext['username'],
-                        data['destination']
-                    )
-                    self.send_secure_request(message)
-                elif stage == '5':
-                    iv, key = self.session_keys[data['sender']]
-                    message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
-                    if not validate_nonce(self.last_nonce, message['converted_nonce']):
-                        raise Exception('Fuck you')
-                    converted_nonce = convert_nonce(message['nonce'])
-                    data_to_send = json.dumps({
-                        'converted_nonce': converted_nonce,
-                    })
-                    cipher_text, _, _ = AESEncoder.encrypt(data_to_send, iv, key)
-                    message = MessageHandler.create_handshake_finalize_request(
-                        str(cipher_text),
-                        data['sender'],
-                        data['user']
-                    )
-                    self.send_secure_request(message)
-                elif stage == '7':
-                    iv, key = self.session_keys[data['sender']]
-                    message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
-                    if not validate_nonce(self.last_nonce, message['converted_nonce']):
-                        self.session_keys[data['sender']] = None
-                        raise Exception('Fuck you')
+    def _handleee(self, data, message, stage):
+        if stage == '3':
+            message = json.loads(message)
+            encrypted_keys = literal_eval(message['encrypted_keys'])
+            cipher_text = literal_eval(message['cipher_text'])
+            keys = self.encoder.decrypt(self.private_key, encrypted_keys)
+            iv = keys[:16]
+            key = keys[16:]
+            plaintext = AESEncoder.decrypt(cipher_text, iv, key)
+            plaintext = json.loads(plaintext)
+            converted_nonce = convert_nonce(plaintext['nonce'])
+            self.session_keys[plaintext['username']] = (iv, key)
+            self.last_nonce = create_nonce()
+            data_to_send = json.dumps({
+                'nonce': self.last_nonce,
+                'converted_nonce': converted_nonce,
+            })
+            cipher_text, _, _ = AESEncoder.encrypt(data_to_send, iv, key)
+            message = MessageHandler.create_handshake_response_request(
+                str(cipher_text),
+                plaintext['username'],
+                data['destination']
+            )
+            self.send_secure_request(message)
+        elif stage == '5':
+            iv, key = self.session_keys[data['sender']]
+            message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
+            # if not validate_nonce(self.last_nonce, message['converted_nonce']):
+            #     raise Exception('Fuck you')
+            converted_nonce = convert_nonce(message['nonce'])
+            data_to_send = json.dumps({
+                'converted_nonce': converted_nonce,
+            })
+            cipher_text, _, _ = AESEncoder.encrypt(data_to_send, iv, key)
+            message = MessageHandler.create_handshake_finalize_request(
+                str(cipher_text),
+                data['sender'],
+                data['user']
+            )
+            self.send_secure_request(message)
+        elif stage == '7':
+            iv, key = self.session_keys[data['sender']]
+            message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
+            if not validate_nonce(self.last_nonce, message['converted_nonce']):
+                self.session_keys[data['sender']] = None
+                raise Exception('Fuck you')
+        elif stage == '9':
+            iv, key = self.session_keys[data['sender']]
+            message_packet = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
+            if message_packet['sequence_number'] != self.sequence_numbers[data['sender']]:
+                raise Exception('Fuck you hacker I have no asab')
+            self.messages[data['sender']].append(message)
+            self.sequence_numbers[data['sender']] += 1
+            ack_packet = json.dumps({
+                'message': message,
+                'converted_nonce': convert_nonce(message_packet['nonce']),
+                'new_sequence_number': self.sequence_numbers[data['sender']]
+            })
+            cipher_text, _, _ = AESEncoder.encrypt(ack_packet, iv, key)
+            message = MessageHandler.create_chat_message_ack_request(
+                str(cipher_text),
+                data['sender'],
+                self.username
+            )
+            self.send_secure_request(message)
+            a = 22
+        elif stage == '11':
+            iv, key = self.session_keys[data['sender']]
+            message_packet = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
+            if message_packet['new_sequence_number'] != self.sequence_numbers[data['sender']] + 1:
+                raise Exception("wrong seq number")
+            if not validate_nonce(self.last_nonce, message_packet['converted_nonce']):
+                raise Exception("wrong nonce")
+            self.messages[data['sender']].append(message_packet['message'])
+            self.sequence_numbers[data['sender']] += 1
 
 
 if __name__ == "__main__":

@@ -105,6 +105,11 @@ class MessageHandler:
         return cls._insecure_message(content, action, destination=destination, )
 
     @classmethod
+    def create_chat_message_request(cls, content, destination, source):
+        action = MessageType.CHAT_MESSAGE_REQUEST.value
+        return cls._insecure_message(content, action, destination=destination, source=source)
+
+    @classmethod
     def create_handshake_response_request(cls, content, destination, source):
         action = MessageType.HANDSHAKE_RESPONSE.value
         return cls._insecure_message(content, action, destination=destination, source=source)
@@ -113,7 +118,10 @@ class MessageHandler:
         action = MessageType.HANDSHAKE_FINALIZE.value
         return cls._insecure_message(content, action, destination=destination, source=source)
     @classmethod
+    def create_chat_message_ack_request(cls, content, destination, source):
+        action = MessageType.CHAT_MESSAGE_ACK.value
+        return cls._insecure_message(content, action, destination=destination, source=source)
+
+    @classmethod
     def create_listen_port_request(cls, port):
         return cls._insecure_message(str(port), 'nothing')
-
-

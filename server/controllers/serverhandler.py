@@ -41,28 +41,32 @@ class ServerHandler(Subject):
             client_listen_socket.connect((self.host, client_listen_port))
             self.listen_sockets[connection] = client_listen_socket
             while True:
-                data = connection.recv(2 ** 15)
-                if not data:
-                    break
+                try:
+                    data = connection.recv(2 ** 15)
+                    if not data:
+                        break
 
-                message = self._decrypt_request(data)
+                    message = self._decrypt_request(data)
 
-                if connection not in self.online_users_dict:
-                    ## handle answering to request without any login.
-                    response = getattr(self, message.action)(message, connection)
-                else:
-                    ## handle answering to request without any login.
-                    response = getattr(self, message.action)(message, connection)
-                    client_public_key = User.get_user_public_key(self.online_users_dict[connection])
-                    cipher_text, iv, key = AESEncoder().encrypt(response)
-                    encrypted_keys = self.encoder.encrypt(client_public_key, iv + key)
-                    response = json.dumps({
-                        'encrypted_keys': str(encrypted_keys),
-                        'cipher_text': str(cipher_text),
-                        'message_type': message.action
-                    })
-                connection.sendall(response.encode())
-                connection.sendall(self.encoder.sign_message(response.encode(), self.private_key))
+                    if connection not in self.online_users_dict:
+                        ## handle answering to request without any login.
+                        response = getattr(self, message.action)(message, connection)
+                    else:
+                        ## handle answering to request without any login.
+                        response = getattr(self, message.action)(message, connection)
+                        client_public_key = User.get_user_public_key(self.online_users_dict[connection])
+                        cipher_text, iv, key = AESEncoder().encrypt(response)
+                        encrypted_keys = self.encoder.encrypt(client_public_key, iv + key)
+                        response = json.dumps({
+                            'encrypted_keys': str(encrypted_keys),
+                            'cipher_text': str(cipher_text),
+                            'message_type': message.action
+                        })
+                    connection.sendall(response.encode())
+                    connection.sendall(self.encoder.sign_message(response.encode(), self.private_key))
+                except Exception as e:
+                    x = 2 * 2
+                    continue
 
     def _decrypt_request(self, data, *args) -> Message:
         data = json.loads(data.decode())
@@ -136,5 +140,33 @@ class ServerHandler(Subject):
             })
         other_side_connection.sendall(
             data.encode()
+        )
+        return 'True'
+
+    def send_chat_message(self, message, connection):
+        other_side_connection = self.get_listen_socket_of_username(message.destination)
+        data = json.dumps({
+                'message': message.content,
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key)),
+                'sender': message.source,
+                'stage': '9'
+            })
+        try:
+            other_side_connection.sendall(
+                data.encode()
+            )
+        except Exception as e:
+            a = 1
+        return 'True'
+
+    def acknowledge_chat_message(self, message, connection):
+        other_side_connection = self.get_listen_socket_of_username(message.destination)
+        other_side_connection.sendall(
+            json.dumps({
+                'message': message.content,
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key)),
+                'sender': message.source,
+                'stage': '11'
+            }).encode()
         )
         return 'True'

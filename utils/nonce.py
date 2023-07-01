@@ -7,7 +7,7 @@ def create_nonce():
 
 
 def convert_nonce(nonce: int):
-    return (nonce + 2) ** 3
+    return (nonce + 2) ** 2 + 1
 
 
 def validate_nonce(nonce, converted_nonce):
