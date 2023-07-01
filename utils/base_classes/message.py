@@ -105,10 +105,15 @@ class MessageHandler:
         return cls._insecure_message(content, action, destination=destination, )
 
     @classmethod
-    def create_handshake_response_request(cls, content, destination):
+    def create_handshake_response_request(cls, content, destination, source):
         action = MessageType.HANDSHAKE_RESPONSE.value
-        return cls._insecure_message(content, action, destination=destination, )
-
+        return cls._insecure_message(content, action, destination=destination, source=source)
+    @classmethod
+    def create_handshake_finalize_request(cls, content, destination, source):
+        action = MessageType.HANDSHAKE_FINALIZE.value
+        return cls._insecure_message(content, action, destination=destination, source=source)
     @classmethod
     def create_listen_port_request(cls, port):
         return cls._insecure_message(str(port), 'nothing')
+
+

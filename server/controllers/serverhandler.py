@@ -105,7 +105,9 @@ class ServerHandler(Subject):
         other_side_connection.sendall(
             json.dumps({
                 'message': message.content,
-                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key))
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key)),
+                'destination': message.destination,
+                'stage': '3'
             }).encode()
         )
         return 'True'
@@ -115,7 +117,24 @@ class ServerHandler(Subject):
         other_side_connection.sendall(
             json.dumps({
                 'message': message.content,
-                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key))
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key)),
+                'sender': message.source,
+                'user': message.destination,
+                'stage': '5'
             }).encode()
+        )
+        return 'True'
+
+    def finalize_handshake(self, message, connection):
+        other_side_connection = self.get_listen_socket_of_username(message.destination)
+        data = json.dumps({
+                'message': message.content,
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key)),
+                'sender': message.source,
+                'user': message.destination,
+                'stage': '7'
+            })
+        other_side_connection.sendall(
+            data.encode()
         )
         return 'True'

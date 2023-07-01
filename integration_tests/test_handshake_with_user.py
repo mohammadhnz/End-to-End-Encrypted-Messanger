@@ -9,7 +9,7 @@ from server.controllers.serverhandler import ServerHandler
 
 
 class TestIntegration:
-    socket = 8000 + randint(1, 10)
+    socket = 8100 + randint(1, 10)
 
     @classmethod
     def setup_class(cls):

@@ -8,3 +8,4 @@ class MessageType(Enum):
     USER_PUBLIC_REQUEST = 'get_user_public_key'
     HANDSHAKE = 'handle_handshake'
     HANDSHAKE_RESPONSE = 'handle_handshake_response'
+    HANDSHAKE_FINALIZE = 'finalize_handshake'
