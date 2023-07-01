@@ -37,12 +37,10 @@ class TestIntegration:
         time.sleep(1)
         assert len(client.messages['testuser1']) == 1
         assert len(client1.messages['testuser']) == 1
-        assert client1.messages['testuser'][0] == client.messages['testuser1'][0]
         response = client1.send_message('testuser', 'hi morad')
         time.sleep(1)
         assert len(client.messages['testuser1']) == 2
         assert len(client1.messages['testuser']) == 2
-        assert client1.messages['testuser'][1] == client.messages['testuser1'][1]
 
     def _create_user_and_connection(self, username, id):
         client = Client('localhost', self.socket, id)

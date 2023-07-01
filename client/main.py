@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import socket
@@ -20,7 +21,7 @@ def random_seq_num():
 class Client:
     def __init__(self, host, port, id=10):
         self.messages = defaultdict(list)
-        self.session_keys = dict()
+        self.session_keys = defaultdict(list)
         self.users_public_keys = dict()
         self.sequence_numbers = defaultdict(int)
         self.host = host
@@ -38,6 +39,46 @@ class Client:
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.receive_socket.bind((host, port + id))
 
+    def save_keys_to_file(self):
+        if not self.username:
+            raise Exception('You are not logged in.')
+        hash_obj = hashlib.sha512(self.password.encode()).digest()
+        iv = hash_obj[:16]
+        key = hash_obj[16:48]
+        keys = json.dumps(
+            {
+                'public_keys': {user: str(key) for user, key in self.users_public_keys.items()},
+                'session_keys': {user: str(key) for user, key in self.session_keys.items()}
+            }
+        )
+        cipher_texts, _, _ = AESEncoder.encrypt(keys, iv, key)
+        with open(f"{self.username}_keys", "wb") as file:
+            file.write(cipher_texts)
+
+    def show_messages(self, user):
+        messages_list = []
+        messages = self.messages[user]
+        for message, key_id in messages:
+            iv, key = self.session_keys[user][-1]
+            print(message)
+            decrypted_message = AESEncoder.decrypt(literal_eval(message), iv, key)
+            messages_list.append(decrypted_message)
+        return messages_list
+    def save_messages_to_file(self):
+        if not self.username:
+            raise Exception('You are not logged in.')
+        hash_obj = hashlib.sha512(self.password.encode()).digest()
+        iv = hash_obj[:16]
+        key = hash_obj[16:48]
+        messages = json.dumps(
+            {
+                'messages': {user: [str(item) for item in msgs] for user, msgs in self.messages.items()},
+            }
+        )
+        cipher_texts, _, _ = AESEncoder.encrypt(messages, iv, key)
+        with open(f"{self.username}_messages", "wb") as file:
+            file.write(cipher_texts)
+
     def connect(self):
         self.socket.connect((self.host, self.port))
         self.start_listening_thread()
@@ -51,8 +92,8 @@ class Client:
         self.socket.sendall(ciphertext)
         if no_response:
             return None
-        response = self.socket.recv(4096 * 4)
-        signature = self.socket.recv(4096 * 4)
+        response = self.socket.recv(4096 * 16)
+        signature = self.socket.recv(4096 * 16)
         status = self.encoder.verify_signature(response, signature, self.server_public_key)
         if not status:
             raise Exception("Sth")
@@ -75,6 +116,7 @@ class Client:
         )
         if response:
             self.username = username
+            self.password = password
         return response
 
     def send_online_users_list_request(self):
@@ -94,7 +136,7 @@ class Client:
             'sequence_number': self.sequence_numbers[username],
             'nonce': self.last_nonce
         })
-        iv, key = self.session_keys[username]
+        iv, key = self.session_keys[username][-1]
         cipher_text, _, _ = AESEncoder.encrypt(message_packet, iv, key)
         message = MessageHandler.create_chat_message_request(str(cipher_text), username, self.username)
         return self.send_secure_request(message)
@@ -102,7 +144,7 @@ class Client:
     def _initialize_handshake_process(self, username):
         self.last_nonce = create_nonce()
         iv, key = os.urandom(16), os.urandom(32)
-        self.session_keys[username] = (iv, key)
+        self.session_keys[username].append((iv, key))
         handshake_data = json.dumps({
             'username': self.username,
             'iv': str(iv),
@@ -181,7 +223,7 @@ class Client:
             plaintext = AESEncoder.decrypt(cipher_text, iv, key)
             plaintext = json.loads(plaintext)
             converted_nonce = convert_nonce(plaintext['nonce'])
-            self.session_keys[plaintext['username']] = (iv, key)
+            self.session_keys[plaintext['username']].append((iv, key))
             self.last_nonce = create_nonce()
             data_to_send = json.dumps({
                 'nonce': self.last_nonce,
@@ -195,7 +237,7 @@ class Client:
             )
             self.send_secure_request(message)
         elif stage == '5':
-            iv, key = self.session_keys[data['sender']]
+            iv, key = self.session_keys[data['sender']][-1]
             message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
             # if not validate_nonce(self.last_nonce, message['converted_nonce']):
             #     raise Exception('Fuck you')
@@ -211,17 +253,17 @@ class Client:
             )
             self.send_secure_request(message)
         elif stage == '7':
-            iv, key = self.session_keys[data['sender']]
+            iv, key = self.session_keys[data['sender']][-1]
             message = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
-            if not validate_nonce(self.last_nonce, message['converted_nonce']):
-                self.session_keys[data['sender']] = None
+            if not validate_nonce(self.last_nonce, message['converted_nonce']) and self.session_keys[data['sender']]:
+                self.session_keys[data['sender']].pop()
                 raise Exception('Fuck you')
         elif stage == '9':
-            iv, key = self.session_keys[data['sender']]
+            iv, key = self.session_keys[data['sender']][-1]
             message_packet = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
             if message_packet['sequence_number'] != self.sequence_numbers[data['sender']]:
                 raise Exception('Fuck you hacker I have no asab')
-            self.messages[data['sender']].append(message)
+            self.messages[data['sender']].append((message, len(self.session_keys[data['sender']])))
             self.sequence_numbers[data['sender']] += 1
             ack_packet = json.dumps({
                 'message': message,
@@ -235,9 +277,8 @@ class Client:
                 self.username
             )
             self.send_secure_request(message)
-            a = 22
         elif stage == '11':
-            iv, key = self.session_keys[data['sender']]
+            iv, key = self.session_keys[data['sender']][-1]
             message_packet = json.loads(AESEncoder().decrypt(literal_eval(message), iv, key))
             if message_packet['new_sequence_number'] != self.sequence_numbers[data['sender']] + 1:
                 raise Exception("wrong seq number")
