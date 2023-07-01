@@ -8,9 +8,11 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 class AESEncoder:
     @classmethod
-    def encrypt(cls, message):
-        iv = os.urandom(16)
-        key = os.urandom(32)
+    def encrypt(cls, message, iv=None, key=None):
+        if not iv:
+            iv = os.urandom(16)
+        if not key:
+            key = os.urandom(32)
         padder = padding.PKCS7(128).padder()
         padded_message = padder.update(message.encode('utf-8')) + padder.finalize()
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())

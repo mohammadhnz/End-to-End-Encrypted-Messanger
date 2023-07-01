@@ -31,14 +31,23 @@ class MessageHandler:
         return cls._insecure_message(content, action)
 
     @classmethod
-    def _insecure_message(cls, content, action):
-        message = Message(
-            action=action,
-            destination='Server',
+    def _insecure_message(
+            cls,
+            content,
+            action,
             source=None,
+            destination='Server',
+            timestamp=None,
             nonce=None,
             seq=None,
-            time_stamp=None,
+    ):
+        message = Message(
+            action=action,
+            destination=destination,
+            source=source,
+            nonce=nonce,
+            seq=seq,
+            time_stamp=timestamp,
             content=content,
         )
         return json.dumps({
@@ -84,3 +93,13 @@ class MessageHandler:
         action = MessageType.ONLINE_USERS_REQUEST.value
         return cls._insecure_message(content, action)
 
+    @classmethod
+    def create_user_public_key_request(cls, username, nonce):
+        content = json.dumps({'username': username})
+        action = MessageType.USER_PUBLIC_REQUEST.value
+        return cls._insecure_message(content, action, nonce=nonce)
+
+    @classmethod
+    def create_handshake_request(cls, content, destination):
+        action = MessageType.HANDSHAKE.value
+        return cls._insecure_message(content, action, destination=destination, )

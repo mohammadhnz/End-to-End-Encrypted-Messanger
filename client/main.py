@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 from ast import literal_eval
 
@@ -6,6 +7,7 @@ from utils.base_classes.message import MessageHandler
 from utils.connection_env import SERVER_PORT
 from utils.encryptor_services.aes_encryptor import AESEncoder
 from utils.encryptor_services.rsa_encryptor import RSAEncoder
+from utils.nonce import create_nonce, validate_nonce
 
 
 class Client:
@@ -19,6 +21,9 @@ class Client:
         self.private_key = None
         self.public_key = None
         self.username = None
+        self.users_public_keys = dict()
+        self.last_nonce = None
+        self.temp_user_name = None
 
     def connect(self):
         self.socket.connect((self.host, self.port))
@@ -26,8 +31,8 @@ class Client:
     def send_request(self, message):
         ciphertext = self._encrypt_message(message)
         self.socket.sendall(ciphertext)
-        response = self.socket.recv(2048)
-        signature = self.socket.recv(2048)
+        response = self.socket.recv(4096)
+        signature = self.socket.recv(4096)
         status = self.encoder.verify_signature(response, signature, self.server_public_key)
         if not status:
             raise Exception("Sth")
@@ -55,6 +60,35 @@ class Client:
     def send_online_users_list_request(self):
         message = MessageHandler.create_online_users_message(self.username)
         return self.send_secure_request(message)
+
+    def send_handshake_request(self, username):
+        self._update_public_key_of_receiver(username)
+        self.last_nonce = create_nonce()
+        iv, key = os.urandom(16), os.urandom(32)
+        handshake_data = json.dumps({
+            'username': self.username,
+            'iv': str(iv),
+            'key': str(key),
+            'nonce': self.last_nonce,
+            'pub': str(self.public_key)
+        })
+
+        encrypted_keys = self.encoder.encrypt(self.users_public_keys[username], iv + key)
+        handshake_packet = json.dumps({
+            'encrypted_keys': str(encrypted_keys),
+            'cipher_text': str(AESEncoder.encrypt(handshake_data, iv, key))
+        })
+        message = MessageHandler.create_handshake_request(handshake_packet, username)
+        return self.send_secure_request(message)
+
+    def _update_public_key_of_receiver(self, username):
+        self.last_nonce = create_nonce()
+        message = MessageHandler.create_user_public_key_request(username, self.last_nonce)
+        response = json.loads(self.send_secure_request(message))
+        if validate_nonce(self.last_nonce, response['converted_nonce']):
+            self.users_public_keys[username] = literal_eval(response['user_public_key'])
+            return
+        raise Exception('Failed to update user\'s publick key.')
 
     def send_secure_request(self, message):
         response = self.send_request(message)
