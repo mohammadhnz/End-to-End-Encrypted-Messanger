@@ -95,13 +95,23 @@ class ServerHandler(Subject):
             'converted_nonce': convert_nonce(message.nonce)
         })
 
-    def get_connection_with_username(self, given_username):
+    def get_listen_socket_of_username(self, given_username):
         for connection, username in self.online_users_dict.items():
             if username == given_username:
-                return connection
+                return self.listen_sockets[connection]
 
     def handle_handshake(self, message, connection):
-        other_side_connection = self.get_connection_with_username(message.destination)
+        other_side_connection = self.get_listen_socket_of_username(message.destination)
+        other_side_connection.sendall(
+            json.dumps({
+                'message': message.content,
+                'sign': str(self.encoder.sign_message(message.content.encode(), self.private_key))
+            }).encode()
+        )
+        return 'True'
+
+    def handle_handshake_response(self, message, connection):
+        other_side_connection = self.get_listen_socket_of_username(message.destination)
         other_side_connection.sendall(
             json.dumps({
                 'message': message.content,

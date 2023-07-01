@@ -8,11 +8,12 @@ from utils.base_classes.message import MessageHandler
 from utils.connection_env import SERVER_PORT
 from utils.encryptor_services.aes_encryptor import AESEncoder
 from utils.encryptor_services.rsa_encryptor import RSAEncoder
-from utils.nonce import create_nonce, validate_nonce
+from utils.nonce import create_nonce, validate_nonce, convert_nonce
 
 
 class Client:
     def __init__(self, host, port, id=10):
+        self.session_keys = dict()
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -85,9 +86,10 @@ class Client:
         })
 
         encrypted_keys = self.encoder.encrypt(self.users_public_keys[username], iv + key)
+        cipher_text, _, _ = AESEncoder.encrypt(handshake_data, iv, key)
         handshake_packet = json.dumps({
             'encrypted_keys': str(encrypted_keys),
-            'cipher_text': str(AESEncoder.encrypt(handshake_data, iv, key))
+            'cipher_text': str(cipher_text)
         })
         message = MessageHandler.create_handshake_request(handshake_packet, username)
         return self.send_secure_request(message)
@@ -130,7 +132,29 @@ class Client:
         with connection:
             while True:
                 data = connection.recv(2 ** 15)
-                print(data)
+                data = json.loads(data)
+                message = data['message']
+                sign = literal_eval(data['sign'])
+                status = self.encoder.verify_signature(message.encode(), sign, self.server_public_key)
+                ## handle hanshake 3rd step
+                message = json.loads(message)
+                encrypted_keys = literal_eval(message['encrypted_keys'])
+                cipher_text = literal_eval(message['cipher_text'])
+                keys = self.encoder.decrypt(self.private_key, encrypted_keys)
+                iv = keys[:16]
+                key = keys[16:]
+                plaintext = AESEncoder.decrypt(cipher_text, iv, key)
+                plaintext = json.loads(plaintext)
+                converted_nonce = convert_nonce(plaintext['nonce'])
+                self.session_keys[plaintext['username']] = (iv, key)
+                self.last_nonce = create_nonce()
+                data_to_send = json.dumps({
+                    'nonce': self.last_nonce,
+                    'converted_nonce': converted_nonce,
+                })
+                cipher_text, _, _ = AESEncoder.encrypt(data_to_send, iv, key)
+                message = MessageHandler.create_handshake_response_request(cipher_text, plaintext['username'])
+                return self.send_secure_request(message)
 
 
 if __name__ == "__main__":
